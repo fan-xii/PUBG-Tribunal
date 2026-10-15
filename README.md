@@ -2,7 +2,7 @@
 
 四个人的 PUBG 赛后投票系统。创建房间、邀请队友、匿名或实名投票，四票到齐后统一揭晓本局战犯和惩罚。适配电脑与手机。
 
-![电脑首页](docs/screenshots/home-desktop.png)
+![电脑首页](docs/screenshots/home-desktop.jpg)
 
 ## 已实现
 
@@ -16,7 +16,7 @@
 - 对局历史、匿名隐私延续、背锅排行榜；作废局不计统计、不揭示选票。
 - 约每 1.2 秒同步，断线重连、前后台切换恢复，服务重启后记录仍保留。
 
-![结算页面](docs/screenshots/result-desktop.png)
+![结算页面](docs/screenshots/result-desktop.jpg)
 
 ## 技术栈
 
@@ -107,3 +107,4 @@ node tests/verify.mjs --restart
 | `db/schema.ts`、`drizzle/` | 数据库结构及迁移 |
 | `tests/verify.mjs` | 四身份 HTTP 验证 |
 | `scripts/dev.ps1` | Windows 一键启动 |
+
