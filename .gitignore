@@ -1,8 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# Dependencies, including deployment subprojects
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -10,35 +8,65 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# Framework output, caches and tests
+.next/
+.vinext/
+.vercel/
+.vite/
+.cache/
+dist/
+out/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+next-env.d.ts
 
-# next.js
-/.next/
-/.vinext/
-/out/
+# Local runtime data and deployment artifacts
+/.wrangler/
+/.sites-runtime/
+/outputs/
+/work/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
 
-# misc
-.DS_Store
+# Environment files and private credentials
+.env*
+!.env.example
+!.env.sample
+.dev.vars*
 *.pem
+*.key
+*.pfx
+*.p12
+.cloudbase/
+.tcb/
+cloudbaserc.local.json
 
-# debug
+# Local editor, agent and operating-system files
+/.agents/
+/.codex/
+.idea/
+.vs/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-next-env.d.ts
-*.tsbuildinfo
-
-# Maintained Vite plugin and worker sources.
+# Maintained build sources
 !/build/
 /build/*
 !/build/connector-preview-plugin.mjs
@@ -47,11 +75,5 @@ next-env.d.ts
 !/build/sites-vite-plugin.ts
 !/build/sites-worker.ts
 
-/dist/
-/.wrangler/
-# Checkout-local execution profile and tool state; never publish them.
-/.sites-runtime/
-/.agents/
-/.codex/
-/outputs/
-/work/
+# Local provider evaluation notes
+/docs/ALIYUN_DEPLOYMENT.md

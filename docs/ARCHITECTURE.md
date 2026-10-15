@@ -2,6 +2,8 @@
 
 项目使用 React 19、TypeScript、Vinext、Cloudflare Worker 和 D1（SQLite）。为兼容直接在线部署，跨设备同步采用约 1.2 秒一次的串行轮询；没有使用 SignalR。页面隐藏时暂停请求，回来后恢复，写入后立即更新本地显示。
 
+腾讯云部署目标复用相同界面、业务逻辑及 API，以 Vite 构建静态网页、普通 Node.js 云函数运行后端，并通过 `deploy/cloudbase/room-store.ts` 适配文档数据库。该版本投票中每 3 秒、等待中每 20 秒同步；完整路径与权限见 [CloudBase 部署说明](CLOUDBASE_DEPLOYMENT.md)。
+
 ## 请求与数据
 
 - `POST /api/rooms`：创建房间，返回房主的私人凭证。
@@ -11,7 +13,7 @@
 
 房间码用于邀请，不是身份凭证。每个成员有两个 UUID 组成的随机凭证；服务器只保存 SHA-256 散列。接口根据凭证识别成员，不信任客户端传来的投票者身份。房主有开局、作废权限；确认惩罚只能由本人执行。
 
-`lib/game.ts` 负责状态流转和输出投影。`lib/room-store.ts` 负责 D1 读写、凭证校验辅助和错误处理。`app/api/rooms/` 是 API；`app/vote-app.tsx` 和 `app/vote.css` 是交互和视觉。
+`lib/game.ts` 负责状态流转和输出投影。`lib/room-store.ts` 负责 D1 读写；`lib/room-http.ts` 提供凭证散列、请求校验和错误处理。`app/api/rooms/` 是 API；`app/vote-app.tsx` 和 `app/vote.css` 是交互和视觉。
 
 ## 原子计票
 

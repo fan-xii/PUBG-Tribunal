@@ -1,0 +1,11 @@
+{
+  "name": "squad-verdict-cloudbase",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "3.18.3"
+  }
+}

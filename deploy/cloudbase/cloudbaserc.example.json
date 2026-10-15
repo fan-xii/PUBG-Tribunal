@@ -1,0 +1,15 @@
+{
+  "envId": "REPLACE_WITH_FREE_ENV_ID",
+  "functionRoot": "../../outputs/cloudbase/functions",
+  "functions": [
+    {
+      "name": "squad-api",
+      "type": "Event",
+      "handler": "index.main",
+      "runtime": "Nodejs20.19",
+      "timeout": 3,
+      "memorySize": 256,
+      "installDependency": false
+    }
+  ]
+}

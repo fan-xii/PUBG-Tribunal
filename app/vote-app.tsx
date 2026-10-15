@@ -171,7 +171,7 @@ function ModalFrame({
     </div>
   );
 }
-export default function VoteApp() {
+export default function VoteApp({ economyPolling = false }: { economyPolling?: boolean } = {}) {
   const [session, setSession] = useState<Session | null>(null),
     [room, setRoom] = useState<PublicRoom | null>(null),
     [view, setView] = useState<View>("room"),
@@ -201,6 +201,8 @@ export default function VoteApp() {
     phaseKey = useRef("");
   const current = room?.rounds.at(-1),
     active = !!current && ["voting", "runoff"].includes(current.phase);
+  const activePolling = useRef(false);
+  activePolling.current = active;
   const memberName = (id?: string) =>
     room?.members.find((m) => m.id === id)?.name || "队员";
   useEffect(() => {
@@ -228,6 +230,7 @@ export default function VoteApp() {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     let controller: AbortController | null = null;
+    const interval = () => economyPolling ? (activePolling.current ? 3000 : 20000) : 1200;
     const poll = async () => {
       if (document.hidden || busy.current) {
         timer = setTimeout(poll, 1200);
@@ -259,7 +262,7 @@ export default function VoteApp() {
         if (!stopped) setConnection("offline");
       } finally {
         clearTimeout(timeout);
-        if (!stopped) timer = setTimeout(poll, 1200);
+        if (!stopped) timer = setTimeout(poll, interval());
       }
     };
     void poll();
@@ -268,7 +271,7 @@ export default function VoteApp() {
       clearTimeout(timer);
       controller?.abort();
     };
-  }, [session]);
+  }, [session, economyPolling]);
   useEffect(() => {
     if (!room) return;
     const key = `${room.code}:${current?.id}:${current?.phase}`;

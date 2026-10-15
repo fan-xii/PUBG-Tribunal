@@ -1,6 +1,10 @@
-# 背锅小队 · Squad Verdict
+# PUBG Tribunal · 背锅小队
 
 四个人的 PUBG 赛后投票系统。创建房间、邀请队友、匿名或实名投票，四票到齐后统一揭晓本局战犯和惩罚。适配电脑与手机。
+
+**[在线试用](https://squad-verdict-d5g9kqjfk96c42cc0-1507116553.ap-shanghai.app.tcloudbase.com/)** · [CloudBase 部署说明](docs/CLOUDBASE_DEPLOYMENT.md) · [架构与规则](docs/ARCHITECTURE.md) · [验证记录](docs/VERIFICATION.md)
+
+> 在线地址使用腾讯云 CloudBase 测试域名，首次打开需在平台提示页点击“确定访问”。截至 2026-10-15，该环境使用免费体验版，有效至 2027-04-15，按量付费关闭。免费额度、续期和域名限制以腾讯云当时规则为准。
 
 ![电脑首页](docs/screenshots/home-desktop.jpg)
 
@@ -16,33 +20,52 @@
 - 对局历史、匿名隐私延续、背锅排行榜；作废局不计统计、不揭示选票。
 - 约每 1.2 秒同步，断线重连、前后台切换恢复，服务重启后记录仍保留。
 
+CloudBase 版本为减少免费额度消耗，投票中每 3 秒、等待阶段每 20 秒同步，隐藏页面暂停轮询；队友开局最多可能延迟约 20 秒显示。
+
 ![结算页面](docs/screenshots/result-desktop.jpg)
+
+<details>
+<summary>手机界面与邀请二维码</summary>
+
+| 手机首页 | 手机结果 |
+| --- | --- |
+| ![手机首页](docs/screenshots/home-mobile.jpg) | ![手机结果](docs/screenshots/result-mobile.jpg) |
+
+![邀请队友](docs/screenshots/invite.jpg)
+
+</details>
 
 ## 技术栈
 
-React 19 + TypeScript + Vinext + Cloudflare Worker + D1（SQLite）+ Drizzle 迁移。使用服务器统一计票和数据库版本锁，真实跨浏览器共享数据。为了支持直接在线部署，本实现采用短轮询同步，没有采用最初讨论的 ASP.NET Core / SignalR。
+React 19 + TypeScript，后端统一计票，通过数据库版本条件更新保证四人并发时不会丢票。界面、API 和 `lib/game.ts` 中的投票规则在两个部署目标间复用。
 
-## 在 Windows 本地启动
+| 运行目标 | 网页与后端 | 数据保存 | 同步方式 |
+| --- | --- | --- | --- |
+| 本地 / Sites | Vinext + Cloudflare Worker | D1（SQLite）+ Drizzle 迁移 | 约 1.2 秒轮询 |
+| 腾讯云 CloudBase | Vite 静态网页 + Node.js 普通云函数 | 文档数据库 | 投票中 3 秒、等待中 20 秒轮询 |
 
-需要 Node.js 22.13 或更高版本。推荐 Node.js 24。
+## 本地运行
 
-```powershell
-cd D:\liqiang\codex\vote
-powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
-```
-
-脚本会安装缺失依赖、构建、应用尚未执行的本地数据库迁移，然后启动。地址以终端输出为准，默认 http://127.0.0.1:5173 。
-
-也可以手动执行：
+需要 Node.js 22.13 或更高版本、npm 和 Git。推荐 Node.js 24。本地验证不需要腾讯云账号或密钥。
 
 ```powershell
+git clone https://github.com/fan-xii/PUBG-Tribunal.git
+cd PUBG-Tribunal
 npm run install:ci
 npm run build
 npm run db:migrate
 npm run dev
 ```
 
-以后只需 `npm run dev`。修改数据库结构后执行 `npm run db:generate` 和 `npm run db:migrate`；第一次运行迁移前需要构建一次。
+地址以终端输出为准，默认 http://127.0.0.1:5173 。
+
+Windows 也可以一键启动：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+```
+
+脚本会安装缺失依赖、构建、应用本地数据库迁移并启动服务。以后只需 `npm run dev`。修改数据库结构后执行 `npm run db:generate` 和 `npm run db:migrate`；第一次运行迁移前需要构建一次。
 
 已构建的 Worker 可通过 `npm start -- --port 8787` 本地运行。开发预览和构建预览使用同一份 `.wrangler/state/` 本地持久化数据。
 
@@ -55,15 +78,33 @@ npm run dev
 5. 收齐四票自动揭晓。首轮平票时四人都需要对并列者加投一次。
 6. 当选者确认完成惩罚，房主开始下一局。历史和榜单自动累计。
 
-实名指游戏昵称，不要求真实姓名。匿名是向队友与房主隐藏投票关系；服务端数据库仍保存选票以计票及防重。四人也可能从聊天和票数推测身份。
+实名指游戏昵称，不要求真实姓名。匿名是向队友与房主隐藏投票关系与理由，后续切换实名也不会公开历史匿名票。服务端数据库仍保存选票用于计票和防重；拥有云账号或数据库管理权限的人能够访问原始数据。四人也可能从聊天和票数推测身份。
 
 四个席位满员后锁定，当前版本没有踢人、转移房主或中途换人；更换阵容请创建新房间。换设备前，在邀请弹窗复制自己的私人恢复码，在首页“使用恢复码找回席位”中恢复。恢复码相当于席位钥匙，不要分享给别人。
 
 ## 多人访问与部署
 
+### 腾讯云 CloudBase
+
+在线试用版已部署到腾讯云。自行部署时，需要使用自己的环境，创建 `squad_rooms` 文档集合并设为仅服务端可访问，再部署云函数、静态网页和同域名路由。
+
+先安装主项目依赖，再构建 CloudBase 产物：
+
+```powershell
+npm ci --prefix deploy/cloudbase
+node deploy/cloudbase/build.mjs
+```
+
+- `outputs/cloudbase/web/`：静态网页。
+- `outputs/cloudbase/functions/squad-api/`：包含 Node SDK 的普通云函数，入口 `index.main`。
+
+具体上传、路由、权限、免费额度和已部署环境信息见 [CloudBase 部署说明](docs/CLOUDBASE_DEPLOYMENT.md)。凭证保留在云平台或本机受保护的配置中，不能写入网页或提交到 Git。
+
+### 本地与 Sites
+
 本机 `127.0.0.1` 地址只供当前电脑验证。手机不能通过扫描一个 localhost 地址连接到这台电脑；四人异地使用需要一个所有人都能访问的公网 HTTPS 地址。
 
-项目已配置 Sites 托管，`.openai/hosting.json` 中保留 Site ID 与 D1 绑定，发布时会应用 `drizzle/` 迁移。Sites 的新站默认是私有预览；分享房间链接不会绕过站点本身的访问权限。正式邀请三位队友前，需要为他们配置站点访问权限或明确将站点设为公开访问。房间成员身份校验始终由应用自身执行。
+仓库保留 Sites 构建配置，`.openai/hosting.json` 中包含原站点的 Site ID 与 D1 绑定。自行部署时请配置自己的站点身份、数据库绑定和访问范围。Sites 的新站默认是私有预览；分享房间链接不会绕过站点本身的访问权限。房间成员身份校验始终由应用自身执行。
 
 本地数据库与托管数据库彼此独立；本地测试房间不会随代码发布。`.wrangler/`、恢复码、环境文件不应进入源码仓库。备份本地数据时先停止服务，再保存整个 `.wrangler/state/` 目录。
 
@@ -77,6 +118,8 @@ npm test
 ```
 
 验证脚本以四份独立凭证调用真实接口，检查并发加入/投票、匿名防泄露、实名明细、重复票、规则锁定、平票两种处理、惩罚确认、作废与权限等 33 项行为。
+
+腾讯云实际 API 的 33 项检查已于 2026-10-15 全部通过，浏览器也验证了网页创建房间与邀请二维码。测试会创建房间和对局数据，请优先使用自己的开发环境。
 
 验证生产构建可在另一个 PowerShell 窗口中运行：
 
@@ -103,7 +146,9 @@ node tests/verify.mjs --restart
 | `app/vote.css` | 深色战术界面与手机布局 |
 | `app/api/rooms/` | 创建、加入、身份校验及投票接口 |
 | `lib/game.ts` | 投票规则、平票流程、结果投影与匿名过滤 |
-| `lib/room-store.ts` | D1 读写、乐观锁、凭证散列及请求校验 |
+| `lib/room-store.ts` | D1 读写与乐观锁 |
+| `lib/room-http.ts` | 凭证散列、请求校验与错误响应 |
+| `deploy/cloudbase/` | CloudBase 网页入口、存储适配、网关入口及构建配置 |
 | `db/schema.ts`、`drizzle/` | 数据库结构及迁移 |
 | `tests/verify.mjs` | 四身份 HTTP 验证 |
 | `scripts/dev.ps1` | Windows 一键启动 |

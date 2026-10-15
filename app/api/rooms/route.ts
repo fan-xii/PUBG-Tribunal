@@ -7,7 +7,7 @@ import {
   type Room,
 } from "@/lib/game";
 import {
-  database,
+  insertRoom,
   errorResponse,
   hashToken,
   newToken,
@@ -43,13 +43,7 @@ export async function POST(request: Request) {
         settings: structuredClone(defaultSettings),
         rounds: [],
       };
-      const result = await database()
-        .prepare(
-          "INSERT OR IGNORE INTO rooms (code, document, revision, updated_at) VALUES (?, ?, 0, ?)",
-        )
-        .bind(code, JSON.stringify(room), room.createdAt)
-        .run();
-      if (result.meta.changes === 1)
+      if (await insertRoom(room))
         return Response.json(
           { token, room: publicRoom(room, member) },
           { status: 201, headers: { "Cache-Control": "no-store" } },
