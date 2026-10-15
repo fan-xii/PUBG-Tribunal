@@ -46,9 +46,10 @@ import {
 } from "@/lib/game";
 type Session = { code: string; token: string };
 type Modal =
-  "help" | "invite" | "penalties" | "vote" | "cancel" | "recover" | null;
+  "help" | "invite" | "penalties" | "vote" | "cancel" | "recover" | "members" | "kick" | "transfer" | null;
 type View = "room" | "history" | "leaderboard";
 const sessionKey = "squad-verdict-sessions-v1";
+const abstainTarget = "__abstain__";
 const reasons = [
   "战术迷路",
   "救援迟到",
@@ -76,6 +77,11 @@ function storeSession(s: Session) {
       [s, ...savedSessions().filter((x) => x.code !== s.code)].slice(0, 20),
     ),
   );
+}
+function forgetSession(s: Session) {
+  localStorage.setItem(sessionKey, JSON.stringify(savedSessions().filter(
+    (x) => x.code !== s.code || x.token !== s.token,
+  )));
 }
 function modeName(mode: string) {
   return mode === "anonymous" ? "匿名投票" : "实名投票";
@@ -196,6 +202,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
   const [recent, setRecent] = useState<Session[]>([]),
     [recovery, setRecovery] = useState(""),
     [qr, setQr] = useState("");
+  const [managedTarget, setManagedTarget] = useState("");
   const requestSequence = useRef(0),
     busy = useRef(false),
     phaseKey = useRef("");
@@ -203,8 +210,9 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
     active = !!current && ["voting", "runoff"].includes(current.phase);
   const activePolling = useRef(false);
   activePolling.current = active;
-  const memberName = (id?: string) =>
-    room?.members.find((m) => m.id === id)?.name || "队员";
+  const allMembers = room ? [...room.members, ...(room.formerMembers || [])] : [];
+  const memberName = (id?: string | null) => id === null ? "弃票" :
+    allMembers.find((m) => m.id === id)?.name || "队员";
   useEffect(() => {
     const all = savedSessions();
     setRecent(all);
@@ -249,7 +257,10 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
         if (stopped || seq !== requestSequence.current) return;
         if (!response.ok) {
           if ([401, 404].includes(response.status)) {
+            forgetSession(session);
+            setRecent(savedSessions());
             setError(data.error || "房间身份已失效");
+            setModal(null);
             setSession(null);
             setRoom(null);
             return;
@@ -272,6 +283,9 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
       controller?.abort();
     };
   }, [session, economyPolling]);
+  useEffect(() => {
+    if (!room?.me.isHost && ["members", "kick", "transfer"].includes(modal || "")) setModal(null);
+  }, [room?.me.isHost, modal]);
   useEffect(() => {
     if (!room) return;
     const key = `${room.code}:${current?.id}:${current?.phase}`;
@@ -567,7 +581,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                   <p className="hero-description">
                     四个人，一场公平的赛后审判。
                     <br />
-                    投出关键一票，让本局战犯光荣登场。
+                    投票或弃票，一起决定这局谁来背锅。
                   </p>
                   <div className="hero-tags">
                     <span>
@@ -776,14 +790,14 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                     </button>
                   </p>
                 </div>
-                <button
-                  className="button secondary"
-                  onClick={() => setModal("invite")}
-                >
-                  <Users size={16} />
-                  邀请队友
-                  <ArrowUpRight size={15} />
-                </button>
+                <div className="room-actions">
+                  {room.me.isHost && <button className="button secondary" onClick={() => { setError(""); setModal("members"); }}>
+                    <Settings2 size={16} />管理成员
+                  </button>}
+                  <button className="button secondary" onClick={() => setModal("invite")}>
+                    <Users size={16} />邀请队友<ArrowUpRight size={15} />
+                  </button>
+                </div>
               </div>
               <div className="stats-row">
                 <Stat
@@ -852,7 +866,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                           <p className="muted">
                             {room.members.length === 4
                               ? "全员已经就位，房主可以在投票设置中开启第一局。"
-                              : "邀请三位队友加入，房主即可发起第一局投票。"}
+                              : `再邀请 ${4 - room.members.length} 位队友加入，房主即可发起第一局投票。`}
                           </p>
                           <div className="member-grid waiting">
                             {[0, 1, 2, 3].map((i) => (
@@ -944,7 +958,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                                 首轮并列：
                                 {current.candidates.map(memberName).join("、")}
                                 <small>
-                                  四人重新投票，只能选并列队员。若再平票，
+                                  四人重新投票，可选并列队员或弃票。全员弃票则无人背锅，仍平票则
                                   {current.tieRule === "shared"
                                     ? "并列者共同受罚"
                                     : "在并列者中随机抽取一人"}
@@ -995,8 +1009,19 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                               </button>
                             ))}
                           </div>
+                          <button
+                            className={`member-card ballot-card abstain-card ${target === abstainTarget || current.myAbstained ? "chosen" : ""}`}
+                            disabled={current.submitted}
+                            aria-pressed={target === abstainTarget || current.myAbstained}
+                            onClick={() => { setTarget(abstainTarget); setReason(""); }}
+                          >
+                            <span className="avatar"><ShieldCheck size={23} /></span>
+                            <div><strong>弃票 · 这局不甩锅</strong><small>不投给任何队员，仍计入提交进度</small></div>
+                            <span className="select-circle">{(target === abstainTarget || current.myAbstained) && <Check size={13} />}</span>
+                          </button>
                           {!current.submitted ? (
                             <>
+                              {target === abstainTarget ? <p className="muted abstain-note">全员弃票时，本局无人背锅，也不执行惩罚。</p> : <>
                               <div className="reason-label">
                                 背锅理由{" "}
                                 <span className="optional">
@@ -1019,6 +1044,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                                   </button>
                                 ))}
                               </div>
+                              </>}
                               <button
                                 className="button primary full submit-vote"
                                 disabled={
@@ -1028,10 +1054,10 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                                 }
                                 onClick={() => setModal("vote")}
                               >
-                                <Crosshair size={17} />
-                                {target
+                                {target === abstainTarget ? <ShieldCheck size={17} /> : <Crosshair size={17} />}
+                                {target === abstainTarget ? "提交弃票" : target
                                   ? `投给 ${memberName(target)}`
-                                  : "选择一位本局战犯"}
+                                  : "选择队员或弃票"}
                                 <ArrowRight size={18} />
                               </button>
                             </>
@@ -1041,7 +1067,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                               <div>
                                 <strong>你的选票已封存</strong>
                                 <p>
-                                  已投给 {memberName(current.myTargetId)}
+                                  {current.myAbstained ? "已弃票" : `已投给 ${memberName(current.myTargetId)}`}
                                   ，等待全员提交后揭晓。
                                 </p>
                               </div>
@@ -1287,7 +1313,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                               <strong>
                                 {r.phase === "cancelled"
                                   ? "本局已作废"
-                                  : `${r.winners.map(memberName).join("、")} 背锅`}
+                                  : r.winners.length ? `${r.winners.map(memberName).join("、")} 背锅` : "本局无人背锅"}
                               </strong>
                               <small>
                                 {timeLabel(r.finishedAt || r.createdAt)} ·{" "}
@@ -1300,7 +1326,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                             >
                               {r.phase === "cancelled"
                                 ? "不计入统计"
-                                : r.winners.every((w) =>
+                                : !r.winners.length ? "无需惩罚" : r.winners.every((w) =>
                                       r.completedBy.includes(w),
                                     )
                                   ? "惩罚已完成"
@@ -1341,7 +1367,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                     按当选次数排名，同次数并列。仅统计已结算对局。
                   </p>
                   <div className="leaderboard">
-                    {[...room.members]
+                    {[...allMembers]
                       .map((m) => ({
                         ...m,
                         count: room.rounds.filter(
@@ -1363,13 +1389,14 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                             {1 + list.filter((x) => x.count > m.count).length}
                           </span>
                           <span
-                            className={`avatar avatar-${room.members.findIndex((x) => x.id === m.id)}`}
+                            className={`avatar avatar-${allMembers.findIndex((x) => x.id === m.id) % 4}`}
                           >
                             {m.name.slice(0, 1)}
                           </span>
                           <div>
                             <strong>
                               {m.name}
+                              {!room.members.some((x) => x.id === m.id) && <span className="self-tag">已离队</span>}
                               {m.id === room.me.id && (
                                 <span className="self-tag">我</span>
                               )}
@@ -1415,7 +1442,10 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
       {modal && (
         <ModalFrame
           title={
-            modal === "help"
+            modal === "members" ? "管理小队成员"
+            : modal === "kick" ? "确认移出队员"
+            : modal === "transfer" ? "确认转移房主"
+            : modal === "help"
               ? "开庭之前，先了解玩法"
               : modal === "invite"
                 ? "邀请队友集结"
@@ -1429,7 +1459,33 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
           }
           onClose={() => setModal(null)}
         >
-          {modal === "help" ? (
+          {modal === "members" && room?.me.isHost ? (
+            <>
+              <p className="muted">转移后你将成为普通队员。踢人会释放席位，历史记录继续保留。</p>
+              {active && <div className="info-note">投票进行中，请先结算或作废本轮后再踢人。</div>}
+              <div className="management-list">
+                {room.members.map((m) => <div className="management-row" key={m.id}>
+                  <div><strong>{m.name}</strong><small>{m.id === room.hostId ? "房主 · 我" : "小队成员"}</small></div>
+                  {m.id !== room.me.id && <div className="management-actions">
+                    <button className="button secondary" disabled={pending} onClick={() => { setManagedTarget(m.id); setError(""); setModal("transfer"); }}>转移房主</button>
+                    <button className="button danger" disabled={pending || active} onClick={() => { setManagedTarget(m.id); setError(""); setModal("kick"); }}>踢出房间</button>
+                  </div>}
+                </div>)}
+              </div>
+            </>
+          ) : (modal === "kick" || modal === "transfer") && room?.me.isHost ? (
+            <>
+              <p className="muted">{modal === "kick"
+                ? `将「${memberName(managedTarget)}」移出房间？其旧凭证和恢复码立即失效，空位可重新邀请队友加入，已有对局和票数不会被删除。持有房间链接的人仍可重新加入空位。`
+                : `将房主转移给「${memberName(managedTarget)}」？对方将拥有开局、作废、踢人和转移权限，你将成为普通队员。`}</p>
+              <div className="management-actions confirm-actions">
+                <button className="button secondary" disabled={pending} onClick={() => { setError(""); setModal("members"); }}>返回</button>
+                <button className={`button ${modal === "kick" ? "danger" : "primary"}`} disabled={pending || (modal === "kick" && active)} onClick={() => action({ action: modal === "kick" ? "kick" : "transferHost", targetId: managedTarget })}>
+                  {pending ? "正在提交…" : modal === "kick" ? "确认踢出" : "确认转移"}
+                </button>
+              </div>
+            </>
+          ) : modal === "help" ? (
             <>
               <ol className="help-steps">
                 <li>
@@ -1447,7 +1503,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                 <li>
                   <strong>每人一票，统一揭晓</strong>
                   <p>
-                    四票收齐后公开结果。匿名局隐藏投票关系与理由；实名局公开谁投给谁和理由。
+                    每人可投给一位队员或选择弃票。四人全部提交后公开结果，全员弃票则本局无人背锅、无需惩罚。匿名局隐藏选择与理由；实名局公开投票或弃票的明细。
                   </p>
                 </li>
                 <li>
@@ -1567,9 +1623,9 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
           ) : modal === "vote" && current ? (
             <>
               <div className="confirm-target">
-                <Crosshair size={30} />
+                {target === abstainTarget ? <ShieldCheck size={30} /> : <Crosshair size={30} />}
                 <span>
-                  你将投给<strong>{memberName(target)}</strong>
+                  {target === abstainTarget ? <>你选择<strong>弃票 · 不投给任何人</strong></> : <>你将投给<strong>{memberName(target)}</strong></>}
                 </span>
               </div>
               <p className="muted">
@@ -1587,7 +1643,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                     action: "vote",
                     roundId: current.id,
                     phase: current.phase,
-                    targetId: target,
+                    targetId: target === abstainTarget ? null : target,
                     reason,
                   })
                 }
@@ -1597,7 +1653,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                 ) : (
                   <>
                     <Check size={17} />
-                    确认投票
+                    {target === abstainTarget ? "确认弃票" : "确认投票"}
                   </>
                 )}
               </button>
@@ -1703,22 +1759,23 @@ function RoundResult({
   onComplete: () => void;
   pending: boolean;
 }) {
-  const name = (id: string) =>
-    room.members.find((m) => m.id === id)?.name || "队员";
+  const name = (id: string | null) => id === null ? "弃票" :
+    [...room.members, ...(room.formerMembers || [])].find((m) => m.id === id)?.name || "队员";
+  const noVerdict = r.winners.length === 0;
   return (
     <div className="round-result">
       <div className="verdict">
         <span className="verdict-symbol">
-          <Trophy size={31} />
+          {noVerdict ? <ShieldCheck size={31} /> : <Trophy size={31} />}
         </span>
         <span className="section-index">
-          {r.winners.length > 1
+          {noVerdict ? "全员弃票 / NO VERDICT" : r.winners.length > 1
             ? "共同背锅 / SHARED VERDICT"
             : "本局战犯 / THE VERDICT"}
         </span>
-        <h3>{r.winners.map(name).join(" & ")}</h3>
+        <h3>{noVerdict ? "本局无人背锅" : r.winners.map(name).join(" & ")}</h3>
         <p>
-          {r.randomDecided
+          {noVerdict ? "四位队员全部弃票，这局不安排惩罚。" : r.randomDecided
             ? "加投仍平票，按开局规则随机抽取。"
             : r.winners.length > 1
               ? "加投仍平票，这口锅一起背。"
@@ -1747,20 +1804,22 @@ function RoundResult({
             </div>
           ))}
       </div>
+      <p className="abstention-summary">{r.hadRunoff ? "加投" : "本轮"}弃票 <strong>{r.abstentionCount || 0}</strong> 票</p>
       {r.hadRunoff && (
         <div className="initial-tally">
           首轮：
           {r.initialTally
             .map((t) => `${name(t.memberId)} ${t.count}票`)
             .join(" / ")}
+          {` / 弃票 ${r.initialAbstentionCount || 0}票`}
           <span>以上票数为加投结果</span>
         </div>
       )}
       <div className="result-penalty">
-        <Gift size={21} />
+        {noVerdict ? <ShieldCheck size={21} /> : <Gift size={21} />}
         <div>
-          <span>本局惩罚</span>
-          <strong>{r.penalty}</strong>
+          <span>{noVerdict ? "本局结果" : "本局惩罚"}</span>
+          <strong>{noVerdict ? "无需惩罚" : r.penalty}</strong>
           <small>
             {r.winners
               .map(

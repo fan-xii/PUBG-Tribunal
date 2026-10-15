@@ -11,7 +11,7 @@ export type Member = {
   tokenHash: string;
   joinedAt: string;
 };
-export type Ballot = { voterId: string; targetId: string; reason: string };
+export type Ballot = { voterId: string; targetId: string | null; reason: string };
 export type Round = {
   id: string;
   number: number;
@@ -25,6 +25,7 @@ export type Round = {
   votes: Ballot[];
   runoff: Ballot[];
   candidates: string[];
+  participantIds?: string[];
   winners: string[];
   completedBy: string[];
   randomDecided?: boolean;
@@ -35,6 +36,7 @@ export type Room = {
   hostId: string;
   createdAt: string;
   members: Member[];
+  formerMembers?: (Pick<Member, "id" | "name" | "joinedAt"> & { removedAt: string })[];
   settings: Settings;
   rounds: Round[];
 };
@@ -94,16 +96,16 @@ export function randomItem<T>(items: T[]): T {
   } while (n >= bound);
   return items[n % items.length];
 }
-export function tally(room: Room, ballots: Ballot[]) {
-  return room.members.map((m) => ({
-    memberId: m.id,
-    count: ballots.filter((v) => v.targetId === m.id).length,
+export function tally(room: Room, ballots: Ballot[], participantIds = room.members.map((m) => m.id)) {
+  return participantIds.map((id) => ({
+    memberId: id,
+    count: ballots.filter((v) => v.targetId === id).length,
   }));
 }
 function top(room: Room, ballots: Ballot[]) {
   const counts = tally(room, ballots);
   const highest = Math.max(...counts.map((t) => t.count));
-  return counts.filter((t) => t.count === highest).map((t) => t.memberId);
+  return highest > 0 ? counts.filter((t) => t.count === highest).map((t) => t.memberId) : [];
 }
 export function applyAction(
   room: Room,
@@ -111,6 +113,28 @@ export function applyAction(
   body: Record<string, unknown>,
 ) {
   const current = room.rounds.at(-1);
+  if (body.action === "kick" || body.action === "transferHost") {
+    if (member.id !== room.hostId)
+      throw new GameError("只有房主可以管理成员", 403);
+    if (body.targetId === member.id)
+      throw new GameError("请选择其他队员");
+    const target = room.members.find((m) => m.id === body.targetId);
+    if (!target) throw new GameError("该队员已不在房间中，请刷新后重试", 409);
+    if (body.action === "transferHost") {
+      room.hostId = target.id;
+      return;
+    }
+    if (current && ["voting", "runoff"].includes(current.phase))
+      throw new GameError("投票进行中不能踢人，请先结算或作废本轮", 409);
+    // 为旧房间补齐当局阵容，再移出成员，避免历史计票跟随当前阵容变化。
+    for (const round of room.rounds)
+      round.participantIds ??= room.members.map((m) => m.id);
+    room.formerMembers ??= [];
+    const { id, name, joinedAt } = target;
+    room.formerMembers.push({ id, name, joinedAt, removedAt: new Date().toISOString() });
+    room.members = room.members.filter((m) => m.id !== target.id);
+    return;
+  }
   if (body.action === "start") {
     if (member.id !== room.hostId)
       throw new GameError("只有房主可以开启投票", 403);
@@ -133,6 +157,7 @@ export function applyAction(
       votes: [],
       runoff: [],
       candidates: room.members.map((m) => m.id),
+      participantIds: room.members.map((m) => m.id),
       winners: [],
       completedBy: [],
     });
@@ -168,16 +193,17 @@ export function applyAction(
   const ballots = current.phase === "runoff" ? current.runoff : current.votes;
   if (ballots.some((v) => v.voterId === member.id))
     throw new GameError("本轮已经提交，不能重复投票或改票", 409);
+  const abstained = body.targetId === null;
   const target = room.members.find((m) => m.id === body.targetId);
-  if (!target || !current.candidates.includes(target.id))
+  if (!abstained && (!target || !current.candidates.includes(target.id)))
     throw new GameError("请选择本轮候选队员");
-  if (!current.allowSelf && target.id === member.id)
+  if (!abstained && !current.allowSelf && target?.id === member.id)
     throw new GameError("本局规则不允许投给自己");
   const reason =
     body.reason === undefined || body.reason === ""
       ? "未填写"
       : textValue(body.reason, "投票原因", 80);
-  ballots.push({ voterId: member.id, targetId: target.id, reason });
+  ballots.push({ voterId: member.id, targetId: abstained ? null : target!.id, reason });
   if (ballots.length < 4) return;
   const leaders = top(room, ballots);
   if (leaders.length > 1 && current.phase === "voting") {
@@ -187,6 +213,7 @@ export function applyAction(
   }
   current.randomDecided = leaders.length > 1 && current.tieRule === "random";
   current.winners = current.randomDecided ? [randomItem(leaders)] : leaders;
+  if (!leaders.length) current.penalty = "";
   current.phase = "result";
   current.finishedAt = new Date().toISOString();
 }
@@ -203,6 +230,7 @@ export function publicRoom(room: Room, member: Member) {
       name,
       joinedAt,
     })),
+    formerMembers: (room.formerMembers || []).map(({ id, name, joinedAt, removedAt }) => ({ id, name, joinedAt, removedAt })),
     me: { id: member.id, isHost: member.id === room.hostId },
     rounds: room.rounds.map((r) => {
       const activeBallots =
@@ -230,10 +258,16 @@ export function publicRoom(room: Room, member: Member) {
         hadRunoff: r.runoff.length > 0 || r.phase === "runoff",
         submitted: !!own,
         myTargetId: own?.targetId,
-        tally: revealed ? tally(room, activeBallots) : [],
+        myAbstained: own?.targetId === null,
+        // 揭晓前仅公开总提交数，不泄露其他人的弃票选择。
+        abstentionCount: revealed ? activeBallots.filter((b) => b.targetId === null).length : 0,
+        initialAbstentionCount:
+          r.phase === "runoff" || (revealed && r.runoff.length)
+            ? r.votes.filter((b) => b.targetId === null).length : 0,
+        tally: revealed ? tally(room, activeBallots, r.participantIds) : [],
         initialTally:
           r.phase === "runoff" || (revealed && r.runoff.length)
-            ? tally(room, r.votes)
+            ? tally(room, r.votes, r.participantIds)
             : [],
         // 服务端删除匿名投票关系，房主和普通成员得到相同的隐私保护。
         ballots: revealed && r.mode === "named" ? activeBallots : [],

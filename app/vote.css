@@ -1,3 +1,24 @@
+.room-actions,
+.management-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.management-list { margin-top: 18px; }
+.management-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.management-row > div:first-child { min-width: 0; }
+.management-row strong { overflow-wrap: anywhere; }
+.management-row small { display: block; color: var(--muted); }
+.management-actions .button { padding: 9px 12px; min-height: 38px; font-size: 12px; }
+.confirm-actions { justify-content: flex-end; margin-top: 20px; }
+@media (max-width: 600px) {
+  .room-actions { width: 100%; }
+  .room-actions > .button { flex: 1; justify-content: center; }
+  .management-row { align-items: flex-start; flex-direction: column; }
+  .management-actions { width: 100%; }
+  .management-actions .button { flex: 1; justify-content: center; }
+}
+.abstain-card { width: 100%; margin: -8px 0 22px; min-height: 74px; }
+.abstain-card .avatar { color: var(--green); background: #283b3b; }
+.abstain-note { font-size: 12px; }
+.abstention-summary { color: var(--muted); font-size: 12px; text-align: right; margin: 0 0 18px; }
+.abstention-summary strong { color: var(--text); }
 :root {
   color-scheme: dark;
   --bg: #101216;

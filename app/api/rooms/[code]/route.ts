@@ -28,7 +28,7 @@ async function credential(request: Request) {
 }
 function memberOf(room: Room, hash: string) {
   const member = room.members.find((m) => m.tokenHash === hash);
-  if (!member) throw new GameError("房间身份已失效，请使用原来的浏览器", 401);
+  if (!member) throw new GameError("房间身份已失效或已被移出，请重新加入或联系房主", 401);
   return member;
 }
 export async function GET(request: Request, context: Context) {
@@ -57,9 +57,9 @@ export async function POST(request: Request, context: Context) {
         joinedAt: new Date().toISOString(),
       };
       const room = await updateRoom(code, (room) => {
-        if (room.members.length >= 4 || room.rounds.length)
+        if (room.members.length >= 4 || ["voting", "runoff"].includes(room.rounds.at(-1)?.phase || ""))
           throw new GameError(
-            "四个席位已经锁定，请使用加入时的浏览器返回",
+            "房间已满或正在投票，请使用原席位或等待空位",
             409,
           );
         if (
