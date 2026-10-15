@@ -9,11 +9,17 @@
 - `POST /api/rooms`：创建房间，返回房主的私人凭证。
 - `POST /api/rooms/:code`，`action=join`：加入房间，返回该成员的私人凭证。
 - `GET /api/rooms/:code`：通过 `Authorization: Bearer <私人凭证>` 读取经过隐私过滤的房间。
-- 同一 POST 接口通过 `action=start/vote/cancel/complete` 开局、投票（含弃票）、作废和确认惩罚，通过 `action=kick/transferHost` 踢人和转移房主。
+- 同一 POST 接口通过 `action=start/vote/cancel/complete` 开局、投票（含弃票）、作废和确认惩罚，通过 `action=kick/transferHost` 踢人和转移房主，通过 `action=rename` 修改自己的昵称。
 
 房间码用于邀请，不是身份凭证。每个成员有两个 UUID 组成的随机凭证；服务器只保存 SHA-256 散列。接口根据凭证识别成员，不信任客户端传来的投票者身份。房主有开局、作废权限；确认惩罚只能由本人执行。
 
 `lib/game.ts` 负责状态流转和输出投影。`lib/room-store.ts` 负责 D1 读写；`lib/room-http.ts` 提供凭证散列、请求校验和错误处理。`app/api/rooms/` 是 API；`app/vote-app.tsx` 和 `app/vote.css` 是交互和视觉。
+
+## 修改昵称
+
+`action=rename` 使用成员凭证修改自己的 `members[].name`，不接受替其他人改名。服务端校验首尾空格处理后的 1–12 个字符，并与其他现役队员进行不区分大小写的重名检查；首轮投票与加投期间拒绝改名。
+
+成员 ID、凭证散列、加入时间及房主 ID 均不变。历史选票、当选记录和完成惩罚记录仍按成员 ID 关联，界面统一使用当前昵称展示历史与榜单。改名仅作用于当前房间，使用原恢复码仍可恢复同一席位。改名也走版本条件更新，冲突重试时重新检查重名、当前投票阶段及身份，避免并发绕过限制。
 
 ## 原子计票
 

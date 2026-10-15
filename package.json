@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 migrations apply DB --local --config wrangler.local.jsonc --persist-to .wrangler/state",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/verify.mjs && node tests/membership.mjs && node tests/abstention.mjs"
+    "test": "node tests/verify.mjs && node tests/membership.mjs && node tests/abstention.mjs && node tests/rename.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

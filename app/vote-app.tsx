@@ -37,6 +37,7 @@ import {
   RotateCcw,
   Plane,
   Fingerprint,
+  Pencil,
 } from "lucide-react";
 import {
   defaultSettings,
@@ -46,7 +47,7 @@ import {
 } from "@/lib/game";
 type Session = { code: string; token: string };
 type Modal =
-  "help" | "invite" | "penalties" | "vote" | "cancel" | "recover" | "members" | "kick" | "transfer" | null;
+  "help" | "invite" | "penalties" | "vote" | "cancel" | "recover" | "members" | "kick" | "transfer" | "rename" | null;
 type View = "room" | "history" | "leaderboard";
 const sessionKey = "squad-verdict-sessions-v1";
 const abstainTarget = "__abstain__";
@@ -203,6 +204,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
     [recovery, setRecovery] = useState(""),
     [qr, setQr] = useState("");
   const [managedTarget, setManagedTarget] = useState("");
+  const [nickname, setNickname] = useState("");
   const requestSequence = useRef(0),
     busy = useRef(false),
     phaseKey = useRef("");
@@ -791,6 +793,9 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                   </p>
                 </div>
                 <div className="room-actions">
+                  <button className="button secondary" onClick={() => {
+                    setNickname(memberName(room.me.id)); setError(""); setModal("rename");
+                  }}><Pencil size={16} />修改昵称</button>
                   {room.me.isHost && <button className="button secondary" onClick={() => { setError(""); setModal("members"); }}>
                     <Settings2 size={16} />管理成员
                   </button>}
@@ -1443,6 +1448,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
         <ModalFrame
           title={
             modal === "members" ? "管理小队成员"
+            : modal === "rename" ? "修改我的昵称"
             : modal === "kick" ? "确认移出队员"
             : modal === "transfer" ? "确认转移房主"
             : modal === "help"
@@ -1459,7 +1465,24 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
           }
           onClose={() => setModal(null)}
         >
-          {modal === "members" && room?.me.isHost ? (
+          {modal === "rename" && room ? (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              await action({ action: "rename", name: nickname });
+            }}>
+              <p className="muted">只修改你在当前房间的昵称。席位、房主身份、恢复码和历史统计都保留，历史记录也会显示新昵称。</p>
+              {active && <div className="info-note">投票进行中，请在本轮结算或作废后修改昵称。</div>}
+              <label className="field">
+                新昵称
+                <input value={nickname} onChange={(e) => setNickname(e.target.value)}
+                  required maxLength={12} autoComplete="off" disabled={pending || active} />
+              </label>
+              <p className="muted">1–12 个字符，不能与当前队友重名。</p>
+              <button className="button primary full" disabled={pending || active || !nickname.trim()}>
+                {pending ? "正在保存…" : "保存昵称"}
+              </button>
+            </form>
+          ) : modal === "members" && room?.me.isHost ? (
             <>
               <p className="muted">转移后你将成为普通队员。踢人会释放席位，历史记录继续保留。</p>
               {active && <div className="info-note">投票进行中，请先结算或作废本轮后再踢人。</div>}

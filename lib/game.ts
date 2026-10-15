@@ -113,6 +113,17 @@ export function applyAction(
   body: Record<string, unknown>,
 ) {
   const current = room.rounds.at(-1);
+  if (body.action === "rename") {
+    if (body.targetId !== undefined && body.targetId !== member.id)
+      throw new GameError("只能修改自己的昵称", 403);
+    if (current && ["voting", "runoff"].includes(current.phase))
+      throw new GameError("投票进行中不能改名，请先结算或作废本轮", 409);
+    const name = textValue(body.name, "昵称", 12);
+    if (room.members.some((m) => m.id !== member.id && m.name.toLocaleLowerCase() === name.toLocaleLowerCase()))
+      throw new GameError("昵称已被队友使用，请换一个", 409);
+    member.name = name;
+    return;
+  }
   if (body.action === "kick" || body.action === "transferHost") {
     if (member.id !== room.hostId)
       throw new GameError("只有房主可以管理成员", 403);
