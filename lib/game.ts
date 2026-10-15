@@ -29,6 +29,7 @@ export type Round = {
   winners: string[];
   completedBy: string[];
   randomDecided?: boolean;
+  reasonDisclosure?: "public";
 };
 export type Room = {
   code: string;
@@ -171,6 +172,7 @@ export function applyAction(
       participantIds: room.members.map((m) => m.id),
       winners: [],
       completedBy: [],
+      reasonDisclosure: "public",
     });
     return;
   }
@@ -210,10 +212,11 @@ export function applyAction(
     throw new GameError("请选择本轮候选队员");
   if (!abstained && !current.allowSelf && target?.id === member.id)
     throw new GameError("本局规则不允许投给自己");
-  const reason =
-    body.reason === undefined || body.reason === ""
-      ? "未填写"
-      : textValue(body.reason, "投票原因", 80);
+  if (body.reason !== undefined && typeof body.reason !== "string")
+    throw new GameError("投票理由需要是文字");
+  const reason = (body.reason as string | undefined)?.replace(/\r\n?/g, "\n").trim() || "未填写";
+  if (reason.length > 80 || /[\u0000-\u0009\u000b-\u001f]/.test(reason))
+    throw new GameError("投票理由不能超过 80 个字符，且不能包含控制字符");
   ballots.push({ voterId: member.id, targetId: abstained ? null : target!.id, reason });
   if (ballots.length < 4) return;
   const leaders = top(room, ballots);
@@ -227,6 +230,12 @@ export function applyAction(
   if (!leaders.length) current.penalty = "";
   current.phase = "result";
   current.finishedAt = new Date().toISOString();
+}
+function anonymousReasons(ballots: Ballot[]) {
+  // 只投影被投对象与理由；按内容排序，避免暴露提交顺序或阵容顺序。
+  return ballots.filter((b) => b.targetId !== null && b.reason && b.reason !== "未填写")
+    .map(({ targetId, reason }) => ({ targetId: targetId as string, reason }))
+    .sort((a, b) => a.targetId.localeCompare(b.targetId) || a.reason.localeCompare(b.reason));
 }
 export function publicRoom(room: Room, member: Member) {
   const current = room.rounds.at(-1);
@@ -251,6 +260,8 @@ export function publicRoom(room: Room, member: Member) {
           ? activeBallots.find((v) => v.voterId === member.id)
           : undefined;
       const revealed = r.phase === "result";
+      // 旧匿名局按提交时的保密规则保留，不追溯公开历史理由。
+      const reasonsPublic = r.reasonDisclosure === "public";
       return {
         id: r.id,
         number: r.number,
@@ -265,6 +276,7 @@ export function publicRoom(room: Room, member: Member) {
         winners: r.winners,
         completedBy: r.completedBy,
         randomDecided: !!r.randomDecided,
+        reasonsPublic,
         ballotCount: activeBallots.length,
         hadRunoff: r.runoff.length > 0 || r.phase === "runoff",
         submitted: !!own,
@@ -284,6 +296,8 @@ export function publicRoom(room: Room, member: Member) {
         ballots: revealed && r.mode === "named" ? activeBallots : [],
         initialBallots:
           revealed && r.mode === "named" && r.runoff.length ? r.votes : [],
+        anonymousReasons: revealed && r.mode === "anonymous" && reasonsPublic ? anonymousReasons(activeBallots) : [],
+        initialAnonymousReasons: revealed && r.mode === "anonymous" && reasonsPublic && r.runoff.length ? anonymousReasons(r.votes) : [],
       };
     }),
   };

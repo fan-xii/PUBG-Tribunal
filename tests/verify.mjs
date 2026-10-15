@@ -139,8 +139,8 @@ check(
   "匿名结果对房主和队员均隐藏投票关系",
 );
 check(
-  snapshots.every((s) => !JSON.stringify(s).includes("测试理由")),
-  "匿名局不泄露理由",
+  snapshots.every((s) => s.rounds.at(-1).anonymousReasons.length === 4 && s.rounds.at(-1).anonymousReasons.every((b) => b.reason === "测试理由" && !Object.hasOwn(b, "voterId"))),
+  "匿名局结算公开理由但不公开理由提交者",
 );
 await api(path, { action: "complete", roundId: round.id }, seats[0].token, 403);
 check(true, "不能替别人确认惩罚");

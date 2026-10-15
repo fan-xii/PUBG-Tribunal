@@ -9,7 +9,7 @@
 .confirm-actions { justify-content: flex-end; margin-top: 20px; }
 @media (max-width: 600px) {
   .room-actions { width: 100%; }
-  .room-actions > .button { flex: 1; justify-content: center; }
+  .room-actions > .button { flex: 1 1 130px; justify-content: center; }
   .management-row { align-items: flex-start; flex-direction: column; }
   .management-actions { width: 100%; }
   .management-actions .button { flex: 1; justify-content: center; }
@@ -19,6 +19,13 @@
 .abstain-note { font-size: 12px; }
 .abstention-summary { color: var(--muted); font-size: 12px; text-align: right; margin: 0 0 18px; }
 .abstention-summary strong { color: var(--text); }
+.custom-reason { margin: 16px 0 0; }
+.custom-reason textarea { resize: vertical; min-height: 88px; }
+.reason-count { color: var(--muted); font-size: 11px; text-align: right; }
+.anonymous-reason { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.anonymous-reason strong { font-size: 12px; color: var(--muted); }
+.anonymous-reason p, .confirm-reason, .ballot-line small { white-space: pre-wrap; overflow-wrap: anywhere; }
+.anonymous-reason p { margin: 6px 0 0; font-size: 13px; line-height: 1.7; }
 :root {
   color-scheme: dark;
   --bg: #101216;

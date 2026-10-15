@@ -51,7 +51,7 @@ const noVerdict = room.rounds.at(-1);
 check(noVerdict.phase === "result" && !noVerdict.winners.length && noVerdict.abstentionCount === 4 && !noVerdict.hadRunoff && noVerdict.tally.every((t) => t.count === 0), "并发全员弃票直接结算无人背锅，不进入四人零票加投");
 check(noVerdict.penalty === "" && !noVerdict.randomDecided && !noVerdict.completedBy.length, "无人背锅不安排惩罚，也不随机抽人");
 const snapshots = await Promise.all(seats.map((_, i) => read(i)));
-check(snapshots.every((r) => !r.rounds.at(-1).winners.length && r.rounds.at(-1).abstentionCount === 4 && !r.rounds.at(-1).ballots.length && !JSON.stringify(r).includes("PRIVATE_ABSTAIN_REASON")), "四个身份看到一致无人背锅结果，匿名理由继续保密");
+check(snapshots.every((r) => !r.rounds.at(-1).winners.length && r.rounds.at(-1).abstentionCount === 4 && !r.rounds.at(-1).ballots.length && !JSON.stringify(r).includes("PRIVATE_ABSTAIN_REASON")), "四个身份看到一致无人背锅结果，弃票不公开投票理由");
 await api(path, { action: "complete", roundId: round.id }, seats[0].token, 403);
 check(true, "无惩罚局拒绝伪造完成惩罚请求");
 

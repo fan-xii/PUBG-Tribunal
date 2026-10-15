@@ -1032,8 +1032,8 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                                 <span className="optional">
                                   选填
                                   {current.mode === "anonymous"
-                                    ? " · 匿名局不公开理由"
-                                    : ""}
+                                    ? current.reasonsPublic ? " · 结算后公开理由，不显示提交者" : " · 本局理由不公开"
+                                    : " · 结算后随选票公开"}
                                 </span>
                               </div>
                               <div className="reason-chips">
@@ -1049,6 +1049,13 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                                   </button>
                                 ))}
                               </div>
+                              <label className="field custom-reason">
+                                自定义理由
+                                <textarea rows={3} maxLength={80} value={reason}
+                                  onChange={(e) => setReason(e.target.value)}
+                                  placeholder="可自由输入，或点击上方标签快速填写（选填）" />
+                                <span className="reason-count">{reason.length} / 80</span>
+                              </label>
                               </>}
                               <button
                                 className="button primary full submit-vote"
@@ -1151,7 +1158,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                       </div>
                       <p className="settings-help">
                         {(active ? current.mode : settings.mode) === "anonymous"
-                          ? "只公开得票数，不公开谁投给谁。"
+                          ? active && !current.reasonsPublic ? "本局仅公开票数，理由保密。" : "结算后公开票数和理由，不公开谁投给谁。"
                           : "结算后公开谁投给谁及投票理由。"}
                       </p>
                       <label className="switch-row">
@@ -1526,7 +1533,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                 <li>
                   <strong>每人一票，统一揭晓</strong>
                   <p>
-                    每人可投给一位队员或选择弃票。四人全部提交后公开结果，全员弃票则本局无人背锅、无需惩罚。匿名局隐藏选择与理由；实名局公开投票或弃票的明细。
+                    每人可投给一位队员或选择弃票，可选标签或自由填写理由。四人全部提交后公开结果，全员弃票则本局无人背锅、无需惩罚。匿名局公开被投队员和理由，不显示理由提交者；实名局公开投票或弃票的明细。更新前的匿名局继续保密理由。
                   </p>
                 </li>
                 <li>
@@ -1655,7 +1662,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                 {modeName(current.mode)} · 提交后不可修改。
                 {current.mode === "named"
                   ? "你的选择和理由将在结算后对全员公开。"
-                  : "结算后只公开汇总票数。"}
+                  : current.reasonsPublic ? "结算后公开票数与理由，不显示理由来自谁。" : "本局结算后只公开汇总票数。"}
               </p>
               {reason && <p className="confirm-reason">理由：{reason}</p>}
               <button
@@ -1893,10 +1900,19 @@ function RoundResult({
           )}
         </div>
       ) : (
-        <p className="privacy-note">
-          <EyeOff size={14} />
-          本局为匿名投票，投票关系与理由不公开。
-        </p>
+        <div className="ballot-details anonymous-reasons">
+          {r.reasonsPublic && <>
+            <h4><EyeOff size={15} />匿名投票理由{r.hadRunoff ? " · 加投" : ""}</h4>
+            {(r.anonymousReasons || []).length ? r.anonymousReasons.map((b, i) => (
+              <div className="anonymous-reason" key={i}><strong>投给 {name(b.targetId)}</strong><p>{b.reason}</p></div>
+            )) : <p className="muted">本轮没有填写投票理由。</p>}
+            {(r.initialAnonymousReasons || []).length > 0 && <details className="initial-ballots">
+              <summary>查看首轮匿名理由</summary>
+              {r.initialAnonymousReasons.map((b, i) => <div className="anonymous-reason" key={i}><strong>投给 {name(b.targetId)}</strong><p>{b.reason}</p></div>)}
+            </details>}
+          </>}
+          <p className="privacy-note"><EyeOff size={14} />{r.reasonsPublic ? "理由按内容排列，不显示提交者或提交顺序。" : "本局按原规则保密，投票关系与理由不公开。"}</p>
+        </div>
       )}
     </div>
   );
