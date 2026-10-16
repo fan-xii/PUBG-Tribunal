@@ -199,8 +199,8 @@ await Promise.all([
 room = await api(path, undefined, seats[0].token);
 round = room.rounds.at(-1);
 check(
-  round.phase === "result" && round.winners.length === 2,
-  "加投仍平票按预设共同背锅",
+  round.phase === "result" && !round.winners.length && round.penalty === "" && round.noVerdictReason === "runoff-tied",
+  "加投仍为 2:2 不产生战犯或惩罚",
 );
 check(
   round.ballots.length === 4 &&
@@ -231,10 +231,8 @@ await Promise.all([
 room = await api(path, undefined, seats[0].token);
 round = room.rounds.at(-1);
 check(
-  round.randomDecided &&
-    round.winners.length === 1 &&
-    [seats[0].id, seats[1].id].includes(round.winners[0]),
-  "随机规则仅从加投并列者中抽一人",
+  !round.randomDecided && !round.winners.length && round.noVerdictReason === "runoff-tied",
+  "旧客户端传入随机设置也不能绕过新的无战犯规则",
 );
 room = (
   await api(

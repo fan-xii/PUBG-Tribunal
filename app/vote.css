@@ -26,6 +26,9 @@
 .anonymous-reason strong { font-size: 12px; color: var(--muted); }
 .anonymous-reason p, .confirm-reason, .ballot-line small { white-space: pre-wrap; overflow-wrap: anywhere; }
 .anonymous-reason p { margin: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.verdict-rules { display: block; }
+.verdict-rules strong { display: block; margin-bottom: 6px; color: var(--text); }
+.verdict-rules p { margin: 0; }
 :root {
   color-scheme: dark;
   --bg: #101216;

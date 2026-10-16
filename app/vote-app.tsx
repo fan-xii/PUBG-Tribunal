@@ -963,10 +963,9 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                                 首轮并列：
                                 {current.candidates.map(memberName).join("、")}
                                 <small>
-                                  四人重新投票，可选并列队员或弃票。全员弃票则无人背锅，仍平票则
-                                  {current.tieRule === "shared"
-                                    ? "并列者共同受罚"
-                                    : "在并列者中随机抽取一人"}
+                                  {current.verdictRule === "minimum-two"
+                                    ? "首轮两人各 2 票，四人加投一次，可选并列队员或弃票。加投需有唯一最高票且至少 2 票才判战犯，否则无人背锅。"
+                                    : `四人重新投票，可选并列队员或弃票。全员弃票则无人背锅，仍平票则${current.tieRule === "shared" ? "并列者共同受罚" : "在并列者中随机抽取一人"}（本局沿用开局时旧规则）。`}
                                   。
                                 </small>
                               </div>
@@ -1180,22 +1179,12 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                           }
                         />
                       </label>
-                      <label className="field small-field">
-                        加投后仍平票
-                        <select
-                          value={active ? current.tieRule : settings.tieRule}
-                          disabled={!room.me.isHost || active}
-                          onChange={(e) =>
-                            setSettings({
-                              ...settings,
-                              tieRule: e.target.value as Settings["tieRule"],
-                            })
-                          }
-                        >
-                          <option value="shared">并列者共同背锅</option>
-                          <option value="random">并列者随机抽取一人</option>
-                        </select>
-                      </label>
+                      <div className="info-note verdict-rules">
+                        <strong>战犯判定规则</strong>
+                        {active && current.verdictRule === "legacy"
+                          ? <p>本局沿用开局时旧规则：加投后仍平票，{current.tieRule === "shared" ? "并列者共同背锅" : "随机抽取一人"}。下一局使用至少 2 票的新规则。</p>
+                          : <p>至少得 2 票，且为唯一最高票者，才判战犯。首轮两人各 2 票时加投一次；加投仍平票或无人达到 2 票，则无人背锅、无需惩罚。</p>}
+                      </div>
                       <div className="rules-divider" />
                       <div className="penalty-header">
                         <span>
@@ -1527,7 +1516,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                 <li>
                   <strong>房主定规则，开启本局</strong>
                   <p>
-                    提前选择匿名或实名、是否允许自首、平票处理和惩罚清单。开局后本局规则锁定。
+                    提前选择匿名或实名、是否允许自首和惩罚清单。战犯至少得 2 票，开局后本局规则锁定。
                   </p>
                 </li>
                 <li>
@@ -1539,7 +1528,7 @@ export default function VoteApp({ economyPolling = false }: { economyPolling?: b
                 <li>
                   <strong>平票加投，留下战绩</strong>
                   <p>
-                    四人对并列队员加投一次，仍平票则按开局规则共同受罚或随机抽取。战犯可以确认完成惩罚。
+                    首轮无人达到 2 票，只展示票数与理由，不产生战犯；两人各 2 票时加投一次。加投仍为 2:2 或无人达到 2 票，则没有战犯。加投有唯一最高票且至少 2 票时当选，战犯可确认完成惩罚。
                   </p>
                 </li>
               </ol>
@@ -1799,13 +1788,15 @@ function RoundResult({
           {noVerdict ? <ShieldCheck size={31} /> : <Trophy size={31} />}
         </span>
         <span className="section-index">
-          {noVerdict ? "全员弃票 / NO VERDICT" : r.winners.length > 1
+          {noVerdict ? `${r.noVerdictReason === "all-abstained" ? "全员弃票" : r.noVerdictReason === "runoff-tied" ? "加投仍平票" : "无人达到 2 票"} / NO VERDICT` : r.winners.length > 1
             ? "共同背锅 / SHARED VERDICT"
             : "本局战犯 / THE VERDICT"}
         </span>
         <h3>{noVerdict ? "本局无人背锅" : r.winners.map(name).join(" & ")}</h3>
         <p>
-          {noVerdict ? "四位队员全部弃票，这局不安排惩罚。" : r.randomDecided
+          {noVerdict ? r.noVerdictReason === "runoff-tied" ? "加投后仍为 2:2，只展示票数和理由，不产生战犯。"
+            : r.noVerdictReason === "insufficient-votes" ? "本轮没有任何队员达到 2 票，只展示票数和理由，不产生战犯。"
+            : "四位队员全部弃票，这局不安排惩罚。" : r.randomDecided
             ? "加投仍平票，按开局规则随机抽取。"
             : r.winners.length > 1
               ? "加投仍平票，这口锅一起背。"

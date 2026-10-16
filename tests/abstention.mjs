@@ -57,23 +57,23 @@ check(true, "无惩罚局拒绝伪造完成惩罚请求");
 
 await start({ mode: "named" });
 check(round.phase === "voting" && round.number === 2, "无人背锅后房主可正常开启下一局");
-await Promise.all(seats.map((_, i) => vote(i, i === 0 ? seats[1].id : null)));
+await Promise.all(seats.map((_, i) => vote(i, i === 0 || i === 2 ? seats[1].id : null)));
 room = await read();
 const mixed = room.rounds.at(-1);
-check(mixed.winners.length === 1 && mixed.winners[0] === seats[1].id && mixed.abstentionCount === 3 && mixed.tally.reduce((sum, t) => sum + t.count, 0) === 1, "混合投票只统计投给队员的票，弃票不参与排名");
-check(mixed.ballots.filter((b) => b.targetId === null).length === 3 && mixed.penalty === settings.penalties[0], "实名结果公开弃票明细，有当选者时正常保留惩罚");
+check(mixed.winners.length === 1 && mixed.winners[0] === seats[1].id && mixed.abstentionCount === 2 && mixed.tally.reduce((sum, t) => sum + t.count, 0) === 2, "两票加两张弃票时达到门槛，弃票不参与排名");
+check(mixed.ballots.filter((b) => b.targetId === null).length === 2 && mixed.penalty === settings.penalties[0], "实名结果公开弃票明细，有当选者时正常保留惩罚");
 
 await start({ mode: "named" });
-await Promise.all([vote(0, seats[1].id), vote(1, seats[0].id), vote(2, null), vote(3, null)]);
+await Promise.all([vote(0, seats[1].id), vote(1, seats[0].id), vote(2, seats[1].id), vote(3, seats[0].id)]);
 round = (await read()).rounds.at(-1);
-check(round.phase === "runoff" && round.candidates.length === 2 && round.initialAbstentionCount === 2 && round.ballotCount === 0 && !round.submitted, "两张有效票平票时加投，首轮弃票者仍需重新提交");
+check(round.phase === "runoff" && round.candidates.length === 2 && round.initialAbstentionCount === 0 && round.ballotCount === 0 && !round.submitted, "两人各两票时加投，四人需重新提交");
 await vote(0, null, { phase: "voting" }, 409);
 check(true, "首轮延迟的弃票请求不能进入加投");
 await Promise.all(seats.map((_, i) => vote(i, null)));
 room = await read();
 const runoffNone = room.rounds.at(-1);
-check(runoffNone.phase === "result" && !runoffNone.winners.length && runoffNone.abstentionCount === 4 && runoffNone.penalty === "" && runoffNone.initialTally.reduce((sum, t) => sum + t.count, 0) === 2, "加投全员弃票可结束为无人背锅，首轮票数保留");
-check(runoffNone.ballots.every((b) => b.targetId === null) && runoffNone.initialBallots.filter((b) => b.targetId === null).length === 2, "实名首轮与加投分别记录弃票明细");
+check(runoffNone.phase === "result" && !runoffNone.winners.length && runoffNone.abstentionCount === 4 && runoffNone.penalty === "" && runoffNone.initialTally.reduce((sum, t) => sum + t.count, 0) === 4, "加投全员弃票可结束为无人背锅，首轮票数保留");
+check(runoffNone.ballots.every((b) => b.targetId === null) && runoffNone.initialBallots.length === 4, "实名首轮四票与加投弃票分别记录");
 
 await start({ tieRule: "random" });
 await Promise.all(seats.map((_, i) => vote(i, null)));

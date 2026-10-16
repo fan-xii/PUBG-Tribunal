@@ -30,6 +30,8 @@ export type Round = {
   completedBy: string[];
   randomDecided?: boolean;
   reasonDisclosure?: "public";
+  verdictRule?: "minimum-two";
+  noVerdictReason?: "all-abstained" | "insufficient-votes" | "runoff-tied";
 };
 export type Room = {
   code: string;
@@ -173,6 +175,7 @@ export function applyAction(
       winners: [],
       completedBy: [],
       reasonDisclosure: "public",
+      verdictRule: "minimum-two",
     });
     return;
   }
@@ -219,15 +222,27 @@ export function applyAction(
     throw new GameError("投票理由不能超过 80 个字符，且不能包含控制字符");
   ballots.push({ voterId: member.id, targetId: abstained ? null : target!.id, reason });
   if (ballots.length < 4) return;
-  const leaders = top(room, ballots);
+  const leaders = current.verdictRule === "minimum-two"
+    ? top(room, ballots).filter((id) => ballots.filter((v) => v.targetId === id).length >= 2)
+    : top(room, ballots);
   if (leaders.length > 1 && current.phase === "voting") {
     current.phase = "runoff";
     current.candidates = leaders;
     return;
   }
-  current.randomDecided = leaders.length > 1 && current.tieRule === "random";
-  current.winners = current.randomDecided ? [randomItem(leaders)] : leaders;
-  if (!leaders.length) current.penalty = "";
+  if (current.verdictRule === "minimum-two") {
+    current.randomDecided = false;
+    current.winners = leaders.length === 1 ? leaders : [];
+    if (!current.winners.length) {
+      current.noVerdictReason = ballots.every((b) => b.targetId === null) ? "all-abstained"
+        : leaders.length > 1 ? "runoff-tied" : "insufficient-votes";
+    }
+  } else {
+    // 已开局的旧对局继续遵守开局时锁定的规则，历史不重新计算。
+    current.randomDecided = leaders.length > 1 && current.tieRule === "random";
+    current.winners = current.randomDecided ? [randomItem(leaders)] : leaders;
+  }
+  if (!current.winners.length) current.penalty = "";
   current.phase = "result";
   current.finishedAt = new Date().toISOString();
 }
@@ -276,6 +291,8 @@ export function publicRoom(room: Room, member: Member) {
         winners: r.winners,
         completedBy: r.completedBy,
         randomDecided: !!r.randomDecided,
+        verdictRule: r.verdictRule || "legacy",
+        noVerdictReason: revealed && !r.winners.length ? r.noVerdictReason || "all-abstained" : undefined,
         reasonsPublic,
         ballotCount: activeBallots.length,
         hadRunoff: r.runoff.length > 0 || r.phase === "runoff",
